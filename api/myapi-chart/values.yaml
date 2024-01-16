@@ -1,0 +1,7 @@
+replicas: 2
+
+image:
+  repository: nginx
+  tag: latest
+
+containerPort: 80

@@ -1,0 +1,7 @@
+apiVersion: v2
+name: myapi-chart
+version: 0.1.0
+dependencies:
+  - name: mylib-chart
+    version: 0.1.0
+    repository: "file://../../share/mylib-chart"  # 修改为 mylib-chart 的实际路径

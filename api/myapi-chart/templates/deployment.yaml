@@ -1,0 +1,1 @@
+{{ include "mylib-chart.deployment" (dict "Values" .Values "Chart" .Chart "Release" .Release) }}

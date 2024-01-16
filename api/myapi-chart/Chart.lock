@@ -1,0 +1,6 @@
+dependencies:
+- name: mylib-chart
+  repository: file://../../share/mylib-chart
+  version: 0.1.0
+digest: sha256:2bcfa0f6caf20c73ee9bfb5bd7dc8a2867360f82d0bbbf7e816314a0d29a1d98
+generated: "2024-01-16T20:45:11.5767234+08:00"
