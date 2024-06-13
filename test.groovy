@@ -24,7 +24,17 @@ pipeline {
         }
     }
 }
-
+def escapeHtml(String text) {
+    if (text == null) {
+        return ""
+    }
+    return text.replace("&", "&amp;")
+               .replace("<", "&lt;")
+               .replace(">", "&gt;")
+               .replace("\"", "&quot;")
+               .replace("'", "&#x27;")
+               .replace("/", "&#x2F;")
+}
 def getHealthCheckResults() {
     return [
         [deployment: 'Deployment A', url: 'http://example.com/healthcheckA', status: 'Failed', responseCode: 500, responseBody: 'Internal Server Error', acceptCode: 200],
