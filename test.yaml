@@ -27,3 +27,11 @@
     - name: Show file content
       debug:
         msg: "{{ file_content.stdout_lines }}"
+
+    - name: Execute Hello World command
+      win_shell: echo Hello World
+      register: hello_output
+
+    - name: Show Hello World output
+      debug:
+        msg: "{{ hello_output.stdout }}"
