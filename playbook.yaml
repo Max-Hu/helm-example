@@ -1,0 +1,36 @@
+---
+- name: Clone Git repository, build with Maven, and copy test results
+  hosts: windows
+  tasks:
+    - name: Ensure C:/test directory exists
+      ansible.windows.win_file:
+        path: C:/test
+        state: directory
+
+    - name: Clone Git repository
+      ansible.windows.win_shell: |
+        if (Test-Path C:/test) {
+          Remove-Item C:/test/* -Recurse -Force
+        }
+        git clone https://your.git.repository.url C:/test
+      args:
+        executable: cmd
+
+    - name: Run Maven build
+      ansible.windows.win_shell: |
+        cd C:/test
+        mvn build
+      args:
+        executable: cmd
+
+    - name: Ensure C:/report directory exists
+      ansible.windows.win_file:
+        path: C:/report
+        state: directory
+
+    - name: Copy testresult folder to C:/report with timestamp
+      ansible.windows.win_shell: |
+        $timestamp = Get-Date -Format "yyyyMMddHHmmss"
+        Copy-Item -Path C:/test/testresult -Destination C:/report/testresult_$timestamp -Recurse
+      args:
+        executable: powershell
