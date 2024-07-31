@@ -1,0 +1,32 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: modify-header
+spec:
+  workloadSelector:
+    labels:
+      app: api1
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: SIDECAR_INBOUND
+      listener:
+        filterChain:
+          filter:
+            name: "envoy.http_connection_manager"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.lua
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+          inlineCode: |
+            function envoy_on_request(request_handle)
+              local headers = request_handle:headers()
+              local specific_header = headers:get("X-Special-Header")
+              if specific_header == "special-value" then
+                headers:add("X-Version", "v2")
+              else
+                headers:add("X-Version", "v1")
+              end
+            end
