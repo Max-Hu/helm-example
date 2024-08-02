@@ -1,11 +1,12 @@
 apiVersion: networking.istio.io/v1alpha3
 kind: EnvoyFilter
 metadata:
-  name: modify-header
+  name: add-header-based-on-inbound
+  namespace: your-namespace
 spec:
   workloadSelector:
     labels:
-      app: api1
+      app: your-app-label
   configPatches:
   - applyTo: HTTP_FILTER
     match:
@@ -13,7 +14,7 @@ spec:
       listener:
         filterChain:
           filter:
-            name: "envoy.http_connection_manager"
+            name: "envoy.filters.network.http_connection_manager"
     patch:
       operation: INSERT_BEFORE
       value:
@@ -23,10 +24,31 @@ spec:
           inlineCode: |
             function envoy_on_request(request_handle)
               local headers = request_handle:headers()
-              local specific_header = headers:get("X-Special-Header")
-              if specific_header == "special-value" then
-                headers:add("X-Version", "v2")
-              else
-                headers:add("X-Version", "v1")
+              local special_header = headers:get("X-Special-Header")
+              if special_header and special_header == "true" then
+                -- Store the header value in a custom header for outbound use
+                request_handle:headers():add("x-original-header", special_header)
+              end
+            end
+  - applyTo: HTTP_FILTER
+    match:
+      context: SIDECAR_OUTBOUND
+      listener:
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.lua
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+          inlineCode: |
+            function envoy_on_request(request_handle)
+              local headers = request_handle:headers()
+              local original_header = headers:get("x-original-header")
+              if original_header and original_header == "true" then
+                -- Add the original header value to the outbound request
+                request_handle:headers():add("X-Special-Header", "true")
               end
             end
