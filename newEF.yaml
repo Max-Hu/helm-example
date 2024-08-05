@@ -1,0 +1,39 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: header-propagate-filter
+  namespace: your-namespace
+spec:
+  workloadSelector:
+    labels:
+      app: your-app-label  # 替换为目标 Pod 的标签
+  configPatches:
+    - applyTo: HTTP_FILTER
+      match:
+        context: SIDECAR_OUTBOUND
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.filters.network.http_connection_manager"
+              subFilter:
+                name: "envoy.filters.http.router"
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.lua
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+            inlineCode: |
+              function envoy_on_request(request_handle)
+                local header_value = request_handle:headers():get("x-custom-header")
+                if header_value then
+                  request_handle:streamInfo():dynamicMetadata():set("envoy.lb", "header_value", header_value)
+                end
+              end
+
+              function envoy_on_response(response_handle)
+                local header_value = response_handle:streamInfo():dynamicMetadata():get("envoy.lb", "header_value")
+                if header_value then
+                  response_handle:headers():add("x-custom-header", header_value)
+                end
+              end
