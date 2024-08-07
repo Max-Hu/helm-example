@@ -1,54 +1,82 @@
+为了确保从 Web 发往 A 的请求中的头部信息能够在 A 调用 B 时传递，并区分 A 调用 B 的请求是否源自 Web 请求，可以使用 Envoy 的动态元数据来保存和传递请求头信息。以下是详细的配置步骤和逻辑：
+
+逻辑概述
+捕获 Web 请求的头部信息：当 Web 发起请求到 A 时，使用 SIDECAR_INBOUND 配置捕获请求头部信息并保存到动态元数据中。
+在 A 调用 B 时传递头部信息：在 A 发起的每个请求中，检查是否存在保存的头部信息，如果存在则将其添加到发往 B 的请求中。
+配置 EnvoyFilter
+yaml
+复制代码
 apiVersion: networking.istio.io/v1alpha3
 kind: EnvoyFilter
 metadata:
-  name: add-header-based-on-inbound
-  namespace: your-namespace
+  name: capture-and-propagate-header
+  namespace: default
 spec:
   workloadSelector:
     labels:
-      app: your-app-label
+      app: service-a  # 选择应用 A 的 Pod
   configPatches:
-  - applyTo: HTTP_FILTER
-    match:
-      context: SIDECAR_INBOUND
-      listener:
-        filterChain:
-          filter:
-            name: "envoy.filters.network.http_connection_manager"
-    patch:
-      operation: INSERT_BEFORE
-      value:
-        name: envoy.filters.http.lua
-        typed_config:
-          "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
-          inlineCode: |
-            function envoy_on_request(request_handle)
-              local headers = request_handle:headers()
-              local special_header = headers:get("X-Special-Header")
-              if special_header and special_header == "true" then
-                -- Store the header value in a custom header for outbound use
-                request_handle:headers():add("x-original-header", special_header)
+    - applyTo: HTTP_FILTER
+      match:
+        context: SIDECAR_INBOUND  # 捕获 inbound 请求
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.filters.network.http_connection_manager"
+              subFilter:
+                name: "envoy.filters.http.router"
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.lua
+          typed_config:
+            "@type": "type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua"
+            inlineCode: |
+              envoy_on_request = function(request_handle)
+                -- 获取 inbound 请求头部信息 x-version
+                local x_version = request_handle:headers():get("x-version")
+                if x_version then
+                  -- 将 x-version 存储在动态元数据中，以便在 outbound 请求中使用
+                  request_handle:streamInfo():dynamicMetadata():set("envoy.filters.http.lua", "x-version", x_version)
+                end
               end
-            end
-  - applyTo: HTTP_FILTER
-    match:
-      context: SIDECAR_OUTBOUND
-      listener:
-        filterChain:
-          filter:
-            name: "envoy.filters.network.http_connection_manager"
-    patch:
-      operation: INSERT_BEFORE
-      value:
-        name: envoy.filters.http.lua
-        typed_config:
-          "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
-          inlineCode: |
-            function envoy_on_request(request_handle)
-              local headers = request_handle:headers()
-              local original_header = headers:get("x-original-header")
-              if original_header and original_header == "true" then
-                -- Add the original header value to the outbound request
-                request_handle:headers():add("X-Special-Header", "true")
+    - applyTo: HTTP_FILTER
+      match:
+        context: SIDECAR_OUTBOUND  # 在 outbound 请求中添加头部信息
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.filters.network.http_connection_manager"
+              subFilter:
+                name: "envoy.filters.http.router"
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.lua
+          typed_config:
+            "@type": "type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua"
+            inlineCode: |
+              envoy_on_request = function(request_handle)
+                -- 从动态元数据中获取 x-version
+                local x_version = request_handle:streamInfo():dynamicMetadata():get("envoy.filters.http.lua")["x-version"]
+                if x_version then
+                  -- 如果 x-version 存在，将其添加到发往 service-b 的请求中
+                  if request_handle:headers():get(":authority") == "service-b" then
+                    request_handle:headers():add("x-version", x_version)
+                  end
+                end
               end
-            end
+配置说明
+捕获 Web 请求的头部信息：
+
+SIDECAR_INBOUND 过滤器在处理从 Web 发往 A 的请求时，捕获请求头部信息 x-version 并存储在动态元数据中。
+在 A 调用 B 时传递头部信息：
+
+SIDECAR_OUTBOUND 过滤器在处理从 A 发往 B 的请求时，检查动态元数据中是否存在 x-version 头部信息。
+如果存在，则将 x-version 头部信息添加到请求中，从而将 Web 请求的头部信息传递给 B。
+关键逻辑
+动态元数据：
+使用 request_handle:streamInfo():dynamicMetadata() 存储和获取请求头部信息。动态元数据在请求流生命周期内有效，可以在同一个请求处理链中传递信息。
+条件判断：
+通过 request_handle:headers():get(":authority") == "service-b" 判断当前请求是否发往 B，确保只有发往 B 的请求才会添加头部信息。
+通过上述配置，EnvoyFilter 能够确保从 Web 发往 A 的请求头部信息 x-version 被捕获并在 A 调用 B 时传递，从而实现请求头信息的传递和区分，无需修改 A 的代码。
