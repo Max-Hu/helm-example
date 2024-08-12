@@ -1,0 +1,79 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: log-inbound-outbound-requests
+  namespace: default
+spec:
+  workloadSelector:
+    labels:
+      app: your-app-label  # 替换为你的目标 Pod 的标签
+  configPatches:
+    # 出站请求日志记录配置
+    - applyTo: HTTP_FILTER
+      match:
+        context: SIDECAR_OUTBOUND  # 针对出站请求的过滤器
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.filters.network.http_connection_manager"
+              subFilter:
+                name: "envoy.filters.http.router"
+      patch:
+        operation: INSERT_BEFORE  # 在路由子过滤器之前插入
+        value:
+          name: envoy.filters.http.lua
+          typed_config:
+            "@type": "type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua"
+            inlineCode: |
+              function envoy_on_request(request_handle)
+                -- 获取请求的 URL
+                local path = request_handle:headers():get(":path")
+                local host = request_handle:headers():get(":authority")
+                local method = request_handle:headers():get(":method")
+                
+                -- 获取请求的所有头部信息
+                local headers = request_handle:headers()
+
+                -- 记录日志，显示 URL 和所有头部信息
+                request_handle:logInfo("Outbound Request URL: " .. method .. " " .. host .. path)
+                
+                -- 遍历并记录所有头部信息
+                for key, value in pairs(headers) do
+                  request_handle:logInfo("Outbound Header: " .. key .. ": " .. value)
+                end
+              end
+
+    # 入站请求日志记录配置
+    - applyTo: HTTP_FILTER
+      match:
+        context: SIDECAR_INBOUND  # 针对入站请求的过滤器
+        listener:
+          filterChain:
+            filter:
+              name: "envoy.filters.network.http_connection_manager"
+              subFilter:
+                name: "envoy.filters.http.router"
+      patch:
+        operation: INSERT_BEFORE  # 在路由子过滤器之前插入
+        value:
+          name: envoy.filters.http.lua
+          typed_config:
+            "@type": "type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua"
+            inlineCode: |
+              function envoy_on_request(request_handle)
+                -- 获取请求的 URL
+                local path = request_handle:headers():get(":path")
+                local host = request_handle:headers():get(":authority")
+                local method = request_handle:headers():get(":method")
+                
+                -- 获取请求的所有头部信息
+                local headers = request_handle:headers()
+
+                -- 记录日志，显示 URL 和所有头部信息
+                request_handle:logInfo("Inbound Request URL: " .. method .. " " .. host .. path)
+                
+                -- 遍历并记录所有头部信息
+                for key, value in pairs(headers) do
+                  request_handle:logInfo("Inbound Header: " .. key .. ": " .. value)
+                end
+              end
