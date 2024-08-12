@@ -12,14 +12,14 @@ spec:
     - applyTo: HTTP_FILTER
       match:
         context: SIDECAR_OUTBOUND  # 针对出站请求的过滤器
+        proxy:
+          proxyVersion: ^1\.10.*  # 指定适配的 Istio 版本
         listener:
           filterChain:
             filter:
-              name: "envoy.filters.network.http_connection_manager"
-              subFilter:
-                name: "envoy.filters.http.router"
+              name: envoy.filters.network.http_connection_manager
       patch:
-        operation: INSERT_BEFORE  # 在路由子过滤器之前插入
+        operation: INSERT_BEFORE  # 在 HTTP 连接管理器之前插入
         value:
           name: envoy.filters.http.lua
           typed_config:
@@ -47,14 +47,14 @@ spec:
     - applyTo: HTTP_FILTER
       match:
         context: SIDECAR_INBOUND  # 针对入站请求的过滤器
+        proxy:
+          proxyVersion: ^1\.10.*  # 指定适配的 Istio 版本
         listener:
           filterChain:
             filter:
-              name: "envoy.filters.network.http_connection_manager"
-              subFilter:
-                name: "envoy.filters.http.router"
+              name: envoy.filters.network.http_connection_manager
       patch:
-        operation: INSERT_BEFORE  # 在路由子过滤器之前插入
+        operation: INSERT_BEFORE  # 在 HTTP 连接管理器之前插入
         value:
           name: envoy.filters.http.lua
           typed_config:
