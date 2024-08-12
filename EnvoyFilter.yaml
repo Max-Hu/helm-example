@@ -33,6 +33,7 @@ spec:
             "@type": "type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua"
             inlineCode: |
               envoy_on_request = function(request_handle)
+                request_handle:logInfo("in the request")
                 -- 获取 inbound 请求头部信息 x-version
                 local x_version = request_handle:headers():get("x-version")
                 if x_version then
